@@ -5,13 +5,16 @@ const cors = require('cors');
 
 // --- IMPORTS ---
 const Paper = require('./models/Paper');
-const User = require('./models/User'); // The new User model for Auth
+const User = require('./models/User'); 
 
 const app = express();
 
-// --- MIDDLEWARE ---
+// --- MIDDLEWARE (The Fix is Here) ---
 app.use(express.json({ limit: '50mb' })); 
-app.use(express.urlencoded({ limit: '50mb', extended: true })); // Allows large PDF uploads
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// ✅ THIS WAS MISSING! This unlocks the door for your frontend.
+app.use(cors()); 
 
 // --- DATABASE CONNECTION ---
 mongoose.connect(process.env.MONGO_URI)
@@ -62,10 +65,8 @@ app.delete('/api/papers/:id', async (req, res) => {
 // REGISTER
 app.post('/api/auth/register', async (req, res) => {
     try {
-        // Destructure all needed fields from body
         const { firstName, lastName, username, matricNumber, email, department, level, password, role } = req.body;
 
-        // Basic check if user exists (by username, email, or matric)
         const existing = await User.findOne({ 
             $or: [{ username }, { email }, { matricNumber }] 
         });
@@ -86,7 +87,6 @@ app.post('/api/auth/login', async (req, res) => {
     try {
         const { identifier, password, department, level } = req.body;
 
-        // 1. Find user by Username OR Email OR Matric Number
         const user = await User.findOne({
             $or: [
                 { username: identifier },
@@ -95,17 +95,14 @@ app.post('/api/auth/login', async (req, res) => {
             ]
         });
 
-        // 2. Basic Credential Check
         if (!user || user.password !== password) {
             return res.status(400).json({ error: "Invalid credentials" });
         }
 
-        // 3. Context Check (Verify department/level match)
         if (user.role === 'student' && (user.department !== department || user.level !== level)) {
              return res.status(400).json({ error: `Our records show you belong to ${user.department} ${user.level}L. Please use those details.` });
         }
 
-        // 4. Success: Return safe user data
         res.json({
             id: user._id,
             username: user.username,
@@ -123,7 +120,7 @@ app.post('/api/auth/login', async (req, res) => {
 
 
 // ==========================================
-// START SERVER (Always at the bottom)
+// START SERVER
 // ==========================================
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(` Server running on port ${PORT}`));
+const PORT = process.env.PORT || 10000; // Updated to match Render's default
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
