@@ -9,14 +9,18 @@ const PaperSchema = new mongoose.Schema({
     semester: { type: String, required: true },
     instructions: String,
     
-    // STRUCTURE FOR TYPED QUESTIONS
+    // ✅ NEW: This matches your frontend logic exactly
+    type: { type: String }, // 'pdf' or 'image'
+    fileData: { type: String }, // Stores the Base64 string
+    
+    // STRUCTURE FOR TYPED QUESTIONS (Keep this, it's good!)
     sections: [{
         id: Number,
         title: String,
         questions: [{ text: String }]
     }],
 
-    // STRUCTURE FOR FILES (Base64)
+    // (Optional: You can keep these for future use, or remove them)
     imagePaths: [String], 
     documents: [{
         name: String,
