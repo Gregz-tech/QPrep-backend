@@ -10,8 +10,8 @@ const User = require('./models/User'); // The new User model for Auth
 const app = express();
 
 // --- MIDDLEWARE ---
-app.use(cors()); 
-app.use(express.json({ limit: '50mb' })); // Allows large PDF uploads
+app.use(express.json({ limit: '50mb' })); 
+app.use(express.urlencoded({ limit: '50mb', extended: true })); // Allows large PDF uploads
 
 // --- DATABASE CONNECTION ---
 mongoose.connect(process.env.MONGO_URI)
@@ -126,4 +126,4 @@ app.post('/api/auth/login', async (req, res) => {
 // START SERVER (Always at the bottom)
 // ==========================================
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(` Server running on port ${PORT}`));
