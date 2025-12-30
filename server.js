@@ -9,11 +9,9 @@ const User = require('./models/User');
 
 const app = express();
 
-// --- MIDDLEWARE (The Fix is Here) ---
+// --- MIDDLEWARE ---
 app.use(express.json({ limit: '50mb' })); 
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-
-// ✅ THIS WAS MISSING! This unlocks the door for your frontend.
 app.use(cors()); 
 
 // --- DATABASE CONNECTION ---
@@ -26,12 +24,18 @@ mongoose.connect(process.env.MONGO_URI)
 // 1. PAPER ROUTES (Dashboard)
 // ==========================================
 
-// GET ALL PAPERS
+// ✅ GET ALL PAPERS (Fixed: Filters out "Garbage Data")
 app.get('/api/papers', async (req, res) => {
     try {
-        const papers = await Paper.find().sort({ createdAt: -1 });
+        // 1. DATABASE FILTER: Only fetch papers with a valid department
+        // We strictly exclude "Select", null, or missing departments
+        const papers = await Paper.find({
+            department: { $exists: true, $ne: "Select", $ne: "" } 
+        }).sort({ createdAt: -1 });
+
         res.json(papers);
     } catch (err) {
+        console.error("GET Error:", err); // Log the real error to the server console
         res.status(500).json({ error: "Failed to fetch papers" });
     }
 });
@@ -122,5 +126,5 @@ app.post('/api/auth/login', async (req, res) => {
 // ==========================================
 // START SERVER
 // ==========================================
-const PORT = process.env.PORT || 10000; // Updated to match Render's default
+const PORT = process.env.PORT || 10000; 
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
