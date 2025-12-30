@@ -166,34 +166,53 @@ app.get('/api/papers', async (req, res) => {
     res.json(papers);
 });
 
-// 🛡️ SECURE UPLOAD ROUTE
+// 🛡️ SECURE UPLOAD ROUTE (With Multi-Department Support)
 app.post('/api/papers', verifyToken, requireStaff, async (req, res) => {
     try {
-        const { department, level } = req.body;
-        const u = req.user; // The logged-in user
+        // We now expect 'departments' to be an Array (e.g., ["ITH", "NUR"])
+        // If it's just a string, we turn it into an array of one.
+        let { departments, level, courseCode, courseTitle, semester, fileData } = req.body;
+        const u = req.user; 
 
-        // RULE: Super Admin can do anything
-        if (u.role === 'superadmin') {
-            // Allow
-        } 
-        // RULE: Moderator must match Scope
-        else if (u.role === 'moderator') {
-            if (u.scope.department !== department || u.scope.level !== level) {
-                return res.status(403).json({ 
-                    error: `Restriction: You can only upload for ${u.scope.department} - ${u.scope.level}L` 
-                });
+        // 1. Normalize Input (Ensure it's always an array)
+        if (!Array.isArray(departments)) {
+            departments = [departments];
+        }
+
+        // 2. Permission Loop
+        // We check every single department requested.
+        // If you are a Moderator, you can ONLY upload for your own dept.
+        if (u.role === 'moderator') {
+            for (const dept of departments) {
+                if (u.scope.department !== dept) {
+                    return res.status(403).json({ 
+                        error: `Restriction: You cannot upload for ${dept}. Only ${u.scope.department}.` 
+                    });
+                }
             }
         }
 
-        // If passed checks, save the paper
-        const newPaper = new Paper({
-            ...req.body,
-            uploadedBy: u.username
+        // 3. The "Broadcast" Loop
+        // We create a database entry for EACH selected department
+        const savePromises = departments.map(dept => {
+            return new Paper({
+                courseCode,
+                courseTitle,
+                level,
+                semester,
+                fileData,
+                department: dept, // Save specifically for this dept
+                uploadedBy: u.username
+            }).save();
         });
-        await newPaper.save();
-        res.status(201).json({ message: "Paper Uploaded" });
+
+        // Wait for all to finish
+        await Promise.all(savePromises);
+
+        res.status(201).json({ message: `Success! Paper uploaded to ${departments.length} department(s).` });
 
     } catch (err) {
+        console.error(err);
         res.status(500).json({ error: "Upload Failed" });
     }
 });
