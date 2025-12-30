@@ -5,14 +5,26 @@ const UserSchema = new mongoose.Schema({
     username: { type: String, required: true, unique: true },
     email: { type: String, required: true, unique: true, lowercase: true },
     
-    // 2. ACADEMIC CONTEXT
-    institution: { type: String, required: true }, // ✅ NEW FIELD
+    // 2. ACADEMIC CONTEXT (Their personal details)
+    institution: { type: String, required: true },
     department: { type: String, required: true },
-    level: { type: String, required: true },       // ✅ KEPT AS REQUESTED
+    level: { type: String, required: true },
     
     // 3. SECURITY & ROLE
-    password: { type: String, required: true },    // Will be hashed
-    role: { type: String, enum: ['student', 'admin'], default: 'student' }
+    password: { type: String, required: true },
+    role: { 
+        type: String, 
+        enum: ['student', 'moderator', 'superadmin'], 
+        default: 'student' 
+    },
+
+    // 4. MODERATOR SCOPE (Only used if role == 'moderator')
+    // This defines where they are allowed to upload
+    moderatorScope: {
+        institution: String,
+        department: String,
+        level: String
+    }
 }, { timestamps: true });
 
 module.exports = mongoose.model('User', UserSchema);
