@@ -76,7 +76,6 @@ app.post('/api/auth/register', async (req, res) => {
         res.status(500).json({ error: "Server Error" });
     }
 });
-
 app.post('/api/auth/login', async (req, res) => {
     try {
         const { identifier, password } = req.body;
@@ -87,20 +86,25 @@ app.post('/api/auth/login', async (req, res) => {
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) return res.status(400).json({ error: "Invalid Credentials" });
 
-        // 🔑 GENERATE TOKEN (The "ID Card")
+        // 🔑 GENERATE TOKEN
         const token = jwt.sign(
             { id: user._id, role: user.role, scope: user.moderatorScope }, 
             JWT_SECRET, 
             { expiresIn: '24h' }
         );
 
+        // ✅ HERE IS THE FIX: We are now sending the details back!
         res.json({
-            token, // Send token to frontend
+            token, 
             user: {
                 _id: user._id,
                 username: user.username,
                 role: user.role,
-                scope: user.moderatorScope
+                scope: user.moderatorScope,
+                // These were missing before:
+                department: user.department,
+                level: user.level,
+                institution: user.institution
             }
         });
 
