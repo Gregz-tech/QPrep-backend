@@ -2,11 +2,12 @@ require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const bcrypt = require('bcryptjs'); // 🔐 ENCRYPTION TOOL
+const bcrypt = require('bcryptjs'); // 🔐 SECURITY SHIELD
+const User = require('./models/User'); // ✅ IMPORTS YOUR MODEL FILE
 
 const app = express();
 
-// Middleware
+// MIDDLEWARE
 app.use(express.json({ limit: '50mb' }));
 app.use(cors());
 
@@ -21,57 +22,29 @@ mongoose.connect(process.env.MONGO_URI, {
 .catch(err => console.log("❌ DB Error:", err));
 
 // ==========================================
-// 2. NEW USER SCHEMA
-// ==========================================
-const UserSchema = new mongoose.Schema({
-    username: { type: String, required: true, unique: true },
-    email: { type: String, required: true, unique: true },
-    institution: { type: String, required: true }, // New Field
-    department: { type: String, required: true },
-    level: { type: String, required: true },       // Kept as requested
-    password: { type: String, required: true },    // Will be Hashed
-    role: { type: String, default: 'student' },
-    createdAt: { type: Date, default: Date.now }
-});
-const User = mongoose.model('User', UserSchema);
-
-// PAPER SCHEMA (Unchanged)
-const PaperSchema = new mongoose.Schema({
-    courseCode: String,
-    courseTitle: String,
-    department: String,
-    level: String,
-    year: String,
-    semester: String,
-    type: String,
-    fileData: String,
-    uploadedAt: { type: Date, default: Date.now }
-});
-const Paper = mongoose.model('Paper', PaperSchema);
-
-// ==========================================
-// 3. AUTHENTICATION ROUTES
+// 2. AUTHENTICATION ROUTES
 // ==========================================
 
 // REGISTER
 app.post('/api/auth/register', async (req, res) => {
     try {
+        // We only accept the fields from your new form
         const { username, email, institution, department, level, password } = req.body;
 
-        // Validation
+        // A. Validation
         if (!username || !email || !institution || !department || !level || !password) {
             return res.status(400).json({ error: "All fields are required" });
         }
 
-        // Check Duplicates
+        // B. Check Duplicates
         const existingUser = await User.findOne({ $or: [{email}, {username}] });
         if (existingUser) return res.status(400).json({ error: "Username or Email already exists" });
 
-        // 🔐 ENCRYPT PASSWORD
+        // C. 🔐 ENCRYPT PASSWORD
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-        // Save User
+        // D. Save User
         const newUser = new User({
             username, 
             email, 
@@ -85,7 +58,7 @@ app.post('/api/auth/register', async (req, res) => {
         res.status(201).json({ message: "User registered successfully" });
 
     } catch (err) {
-        console.error(err);
+        console.error("Register Error:", err);
         res.status(500).json({ error: "Server Error" });
     }
 });
@@ -93,20 +66,20 @@ app.post('/api/auth/register', async (req, res) => {
 // LOGIN
 app.post('/api/auth/login', async (req, res) => {
     try {
-        const { identifier, password } = req.body; // identifier = username OR email
+        const { identifier, password } = req.body;
 
-        // Find user by Username OR Email
+        // A. Find User (by Username OR Email)
         const user = await User.findOne({ 
             $or: [{ username: identifier }, { email: identifier }] 
         });
 
         if (!user) return res.status(400).json({ error: "User not found" });
 
-        // 🔐 VERIFY PASSWORD
+        // B. 🔐 VERIFY PASSWORD
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) return res.status(400).json({ error: "Invalid Credentials" });
 
-        // Send back Safe Data
+        // C. Send Safe Data
         res.json({
             _id: user._id,
             username: user.username,
@@ -117,14 +90,28 @@ app.post('/api/auth/login', async (req, res) => {
         });
 
     } catch (err) {
-        console.error(err);
+        console.error("Login Error:", err);
         res.status(500).json({ error: "Server Error" });
     }
 });
 
 // ==========================================
-// 4. PAPER ROUTES (Unchanged)
+// 3. PAPER ROUTES (Existing Logic)
 // ==========================================
+// (Defining Paper Schema inline for simplicity, or move to models/Paper.js if you have it)
+const PaperSchema = new mongoose.Schema({
+    courseCode: String,
+    courseTitle: String,
+    department: String,
+    level: String,
+    year: String,
+    semester: String,
+    type: String,
+    fileData: String,
+    uploadedAt: { type: Date, default: Date.now }
+});
+const Paper = mongoose.model('Paper', PaperSchema);
+
 app.get('/api/papers', async (req, res) => {
     try {
         const papers = await Paper.find();
