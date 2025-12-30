@@ -93,7 +93,7 @@ app.post('/api/auth/login', async (req, res) => {
             { expiresIn: '24h' }
         );
 
-        // ✅ HERE IS THE FIX: We are now sending the details back!
+        // ✅ THE FIX: Send BOTH "dept" and "department"
         res.json({
             token, 
             user: {
@@ -101,8 +101,13 @@ app.post('/api/auth/login', async (req, res) => {
                 username: user.username,
                 role: user.role,
                 scope: user.moderatorScope,
-                // These were missing before:
+                
+                // 1. The Official Name
                 department: user.department,
+                
+                // 2. The Frontend Name (This fixes the "undefined")
+                dept: user.department, 
+                
                 level: user.level,
                 institution: user.institution
             }
