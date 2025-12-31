@@ -161,9 +161,35 @@ const PaperSchema = new mongoose.Schema({
 });
 const Paper = mongoose.model('Paper', PaperSchema);
 
+// 1. GET DASHBOARD LIST (LIGHTWEIGHT) ⚡
+// This excludes the heavy 'fileData' field using .select('-fileData')
 app.get('/api/papers', async (req, res) => {
-    const papers = await Paper.find();
-    res.json(papers);
+    try {
+        const { department, level } = req.query;
+        let query = {};
+        
+        // Filter by context if provided
+        if (department) query.department = department;
+        if (level) query.level = level;
+
+        // .select('-fileData') means: "Give me everything EXCEPT the heavy file"
+        const papers = await Paper.find(query).select('-fileData').sort({ createdAt: -1 });
+        res.json(papers);
+    } catch (err) {
+        res.status(500).json({ error: "Failed to fetch list" });
+    }
+});
+
+// 2. GET SINGLE PAPER FILE (HEAVY) 📦
+// We only call this when the user CLICKS a specific card
+app.get('/api/papers/:id', async (req, res) => {
+    try {
+        const paper = await Paper.findById(req.params.id);
+        if (!paper) return res.status(404).json({ error: "Paper not found" });
+        res.json(paper); // This includes the fileData
+    } catch (err) {
+        res.status(500).json({ error: "Failed to fetch file" });
+    }
 });
 
 // 🛡️ SECURE UPLOAD ROUTE (With Multi-Department Support)
