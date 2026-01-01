@@ -1,34 +1,40 @@
 const mongoose = require('mongoose');
 
 const PaperSchema = new mongoose.Schema({
+    // --- Core Identifiers ---
     courseCode: { type: String, required: true },
     courseTitle: { type: String, required: true },
     department: { type: String, required: true },
     level: { type: String, required: true },
-    year: { type: String, required: true },
-    semester: { type: String, required: true },
-    instructions: String,
     
-    // ✅ NEW: This matches your frontend logic exactly
+    // ✅ CRITICAL FIX: 'year' is required to prevent "undefined" errors in the dropdown
+    year: { type: String, required: true }, 
+    
+    semester: { type: String, required: true }, // 'First' or 'Second'
+    
+    // --- File Content ---
     type: { type: String }, // 'pdf' or 'image'
-    fileData: { type: String }, // Stores the Base64 string
+    fileData: { type: String }, // Stores the heavy Base64 string
     
-    // STRUCTURE FOR TYPED QUESTIONS (Keep this, it's good!)
+    // --- Typed Questions (for Admin Builder) ---
+    instructions: String,
     sections: [{
         id: Number,
         title: String,
         questions: [{ text: String }]
     }],
 
-    // (Optional: You can keep these for future use, or remove them)
+    // --- Metadata ---
+    uploadedBy: String,
+    uploadedAt: { type: Date, default: Date.now },
+
+    // (Optional Legacy Fields - kept for safety if you used them before)
     imagePaths: [String], 
     documents: [{
         name: String,
         type: String,
         data: String
-    }],
-    
-    createdAt: { type: Date, default: Date.now }
+    }]
 });
 
 module.exports = mongoose.model('Paper', PaperSchema);
