@@ -280,6 +280,48 @@ app.get('/api/super-admin/stats', async (req, res) => {
     }
 });
 
+
+// A. GET ALL USERS (Real List)
+app.get('/api/super-admin/users', verifyToken, requireSuperAdmin, async (req, res) => {
+    try {
+        // Fetch all users but hide their passwords
+        const users = await User.find({}).select('-password').sort({ createdAt: -1 });
+        res.json(users);
+    } catch (err) {
+        res.status(500).json({ error: "Failed to fetch users" });
+    }
+});
+
+// B. UPDATE USER ROLE (Promote/Demote)
+app.patch('/api/super-admin/users/:id/role', verifyToken, requireSuperAdmin, async (req, res) => {
+    try {
+        const { role } = req.body; // e.g. "admin" or "student"
+        
+        // Prevent Super Admin from demoting themselves
+        if (req.params.id === req.user.id) {
+            return res.status(400).json({ error: "You cannot change your own role." });
+        }
+
+        await User.findByIdAndUpdate(req.params.id, { role });
+        res.json({ message: `User role updated to ${role}` });
+    } catch (err) {
+        res.status(500).json({ error: "Failed to update role" });
+    }
+});
+
+// C. DELETE USER
+app.delete('/api/super-admin/users/:id', verifyToken, requireSuperAdmin, async (req, res) => {
+    try {
+        if (req.params.id === req.user.id) {
+            return res.status(400).json({ error: "You cannot delete yourself." });
+        }
+        
+        await User.findByIdAndDelete(req.params.id);
+        res.json({ message: "User deleted permanently" });
+    } catch (err) {
+        res.status(500).json({ error: "Failed to delete user" });
+    }
+});
 // ==========================================
 // 8. START SERVER
 // ==========================================
