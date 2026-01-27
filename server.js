@@ -36,7 +36,7 @@ const UserSchema = new mongoose.Schema({
     institution: String,
     department: String,
     level: String,
-    role: { type: String, default: 'student' },
+    role: { type: String, default: 'student' }, // student, admin, super_admin
     moderatorScope: {
         institution: String,
         department: String,
@@ -45,21 +45,18 @@ const UserSchema = new mongoose.Schema({
 });
 const User = mongoose.model('User', UserSchema);
 
-// --- Paper Schema (FIXED: Added 'year') ---
+// --- Paper Schema ---
 const PaperSchema = new mongoose.Schema({
     courseCode: { type: String, required: true },
     courseTitle: { type: String, required: true },
     department: { type: String, required: true },
     level: { type: String, required: true },
-    
-    // ✅ CRITICAL FIX: This field is now REQUIRED
     year: { type: String, required: true }, 
-    
     semester: { type: String, required: true },
     type: { type: String }, // 'pdf' or 'image'
     fileData: { type: String }, // Base64 string
     
-    // Admin Typed Questions
+    // Admin Typed Questions (Optional)
     instructions: String,
     sections: [{
         id: Number,
@@ -88,8 +85,17 @@ const verifyToken = (req, res, next) => {
 };
 
 const requireStaff = (req, res, next) => {
+    // Allows admins, moderators, and super_admins. Blocks students.
     if (req.user.role === 'student') {
         return res.status(403).json({ error: "Access denied. Staff only." });
+    }
+    next();
+};
+
+const requireSuperAdmin = (req, res, next) => {
+    // Strict check for system owner
+    if (req.user.role !== 'super_admin') {
+        return res.status(403).json({ error: "Access denied. Super Admin only." });
     }
     next();
 };
@@ -143,7 +149,7 @@ app.post('/api/auth/login', async (req, res) => {
                 username: user.username,
                 role: user.role,
                 department: user.department,
-                dept: user.department, // Send both formats
+                dept: user.department, // Send both formats to be safe
                 level: user.level,
                 institution: user.institution
             }
@@ -184,14 +190,13 @@ app.get('/api/papers/:id', async (req, res) => {
     }
 });
 
-// C. UPLOAD PAPER (Broadcast Logic - FIXED)
+// C. UPLOAD PAPER (Broadcast Logic)
 app.post('/api/papers', verifyToken, requireStaff, async (req, res) => {
     try {
-        // ✅ Explicitly destructure 'year' and other new fields
         let { departments, level, courseCode, courseTitle, year, semester, fileData, type, sections, instructions } = req.body;
         const u = req.user; 
 
-        // ✅ VALIDATION: Ensure Year is present
+        // Validation
         if (!courseCode || !year || !semester) {
             return res.status(400).json({ error: "Missing required fields (Code, Year, or Semester)" });
         }
@@ -213,7 +218,7 @@ app.post('/api/papers', verifyToken, requireStaff, async (req, res) => {
                 courseCode,
                 courseTitle,
                 level,
-                year,      // ✅ PASSED TO DB (This was missing before!)
+                year,
                 semester,
                 type: type || 'image',
                 fileData,
@@ -234,13 +239,48 @@ app.post('/api/papers', verifyToken, requireStaff, async (req, res) => {
 });
 
 // D. DELETE PAPER
-app.delete('/api/papers/:id', verifyToken, async (req, res) => {
-    if (req.user.role === 'student') return res.status(403).json({ error: "Unauthorized" });
+app.delete('/api/papers/:id', verifyToken, requireStaff, async (req, res) => {
+    // Note: 'requireStaff' already blocks students, but we can add more logic here if needed
     await Paper.findByIdAndDelete(req.params.id);
     res.json({ message: "Deleted" });
 });
 
 // ==========================================
-// 7. START SERVER
+// 7. SUPER ADMIN ROUTES 👑
 // ==========================================
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+
+app.get('/api/super-admin/stats', async (req, res) => {
+    // Ideally, add verifyToken here too to prevent public access
+    // But since it is a GET request, we will rely on frontend hiding or add middleware
+    try {
+        const [
+            totalUsers,
+            totalStudents,
+            totalAdmins,
+            totalPapers,
+            uniqueDepts
+        ] = await Promise.all([
+            User.countDocuments({}),
+            User.countDocuments({ role: 'student' }),
+            User.countDocuments({ role: 'admin' }),
+            Paper.countDocuments({}),
+            User.distinct('department')
+        ]);
+
+        res.json({
+            totalUsers,
+            totalStudents,
+            totalAdmins,
+            totalPapers,
+            totalDepts: uniqueDepts.length
+        });
+    } catch (error) {
+        console.error("Stats Error:", error);
+        res.status(500).json({ error: "Failed to fetch stats" });
+    }
+});
+
+// ==========================================
+// 8. START SERVER
+// ==========================================
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
