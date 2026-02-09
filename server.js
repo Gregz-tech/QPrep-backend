@@ -238,11 +238,59 @@ app.post('/api/papers', verifyToken, requireStaff, async (req, res) => {
     }
 });
 
-// D. DELETE PAPER
+// ==========================================================
+// 🚨 CRITICAL FIX: BULK DELETE MUST BE BEFORE SINGLE DELETE
+// ==========================================================
+
+// D. BULK DELETE PAPERS 🗑️💥
+app.delete('/api/papers/bulk-delete', verifyToken, requireStaff, async (req, res) => {
+    try {
+        const { ids } = req.body; // Expects array: ["65b...", "65c..."]
+
+        if (!ids || !Array.isArray(ids) || ids.length === 0) {
+            return res.status(400).json({ error: "No papers selected" });
+        }
+
+        // The Magic Command: Deletes everything in the list
+        const result = await Paper.deleteMany({ _id: { $in: ids } });
+
+        res.json({ message: `Successfully deleted ${result.deletedCount} papers.` });
+    } catch (err) {
+        console.error("Bulk Delete Error:", err);
+        res.status(500).json({ error: "Bulk delete failed" });
+    }
+});
+
+// E. DELETE SINGLE PAPER (Dynamic ID)
 app.delete('/api/papers/:id', verifyToken, requireStaff, async (req, res) => {
-    // Note: 'requireStaff' already blocks students, but we can add more logic here if needed
-    await Paper.findByIdAndDelete(req.params.id);
-    res.json({ message: "Deleted" });
+    try {
+        // We added try/catch here to prevent crashing on invalid IDs
+        await Paper.findByIdAndDelete(req.params.id);
+        res.json({ message: "Deleted" });
+    } catch (err) {
+        res.status(500).json({ error: "Delete failed" });
+    }
+});
+
+// F. UPDATE PAPER (Edit Details)
+app.patch('/api/papers/:id', verifyToken, requireStaff, async (req, res) => {
+    try {
+        const updateData = req.body;
+        
+        // We find the paper and update it with the new fields
+        const updatedPaper = await Paper.findByIdAndUpdate(
+            req.params.id, 
+            { $set: updateData }, 
+            { new: true } // Return the updated document
+        );
+
+        if (!updatedPaper) return res.status(404).json({ error: "Paper not found" });
+        
+        res.json({ message: "Paper updated successfully", paper: updatedPaper });
+    } catch (err) {
+        console.error("Update Error:", err);
+        res.status(500).json({ error: "Failed to update paper" });
+    }
 });
 
 // ==========================================
@@ -250,8 +298,6 @@ app.delete('/api/papers/:id', verifyToken, requireStaff, async (req, res) => {
 // ==========================================
 
 app.get('/api/super-admin/stats', async (req, res) => {
-    // Ideally, add verifyToken here too to prevent public access
-    // But since it is a GET request, we will rely on frontend hiding or add middleware
     try {
         const [
             totalUsers,
@@ -322,6 +368,7 @@ app.delete('/api/super-admin/users/:id', verifyToken, requireSuperAdmin, async (
         res.status(500).json({ error: "Failed to delete user" });
     }
 });
+
 // ==========================================
 // 8. START SERVER
 // ==========================================
