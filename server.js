@@ -8,6 +8,8 @@ const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
+const Paper = require('./models/Paper'); 
+
 const app = express();
 
 // ==========================================
@@ -47,9 +49,8 @@ mongoose.connect(process.env.MONGO_URI)
     .catch(err => console.log("❌ DB Error:", err));
 
 // ==========================================
-// 4. SCHEMAS (UPDATED & ROBUST) 🛡️
+// 4. USER SCHEMA (Kept here for simplicity)
 // ==========================================
-
 const UserSchema = new mongoose.Schema({
     username: { type: String, required: true, unique: true },
     email: { type: String, required: true, unique: true },
@@ -66,31 +67,6 @@ const UserSchema = new mongoose.Schema({
 });
 const User = mongoose.model('User', UserSchema);
 
-const PaperSchema = new mongoose.Schema({
-    courseCode: { type: String, required: true },
-    courseTitle: { type: String, required: true },
-    department: { type: String, required: true },
-    level: { type: String, required: true },
-    year: { type: String, required: true }, 
-    semester: { type: String, required: true },
-    type: { type: String }, 
-    
-    // ✅ FIX 1: Multi-Page Support (Optional, defaults to empty)
-    fileUrls: { type: [String], default: [] }, 
-
-    // ✅ FIX 2: Legacy Support (Prevents crashes on old data)
-    fileUrl: { type: String },  
-    fileData: { type: String }, 
-    
-    instructions: String,
-
-    // ✅ FIX 3: Robust Sections (Prevents 'CastError' crash)
-    sections: { type: mongoose.Schema.Types.Mixed },
-
-    uploadedBy: String,
-    uploadedAt: { type: Date, default: Date.now }
-});
-const Paper = mongoose.model('Paper', PaperSchema);
 
 // ==========================================
 // 5. SECURITY MIDDLEWARE
@@ -187,7 +163,6 @@ app.get('/api/papers', async (req, res) => {
         if (department) query.department = department;
         if (level) query.level = level;
         
-        // Safety: Sort helps, but try-catch inside find handles bad data
         const papers = await Paper.find(query).sort({ createdAt: -1 });
         res.json(papers);
     } catch (err) {
@@ -312,7 +287,6 @@ app.patch('/api/papers/:id', verifyToken, requireStaff, async (req, res) => {
 // ==========================================
 // 8. SUPER ADMIN ROUTES
 // ==========================================
-// (Standard routes kept same)
 app.get('/api/super-admin/stats', async (req, res) => {
     try {
         const [totalUsers, totalStudents, totalAdmins, totalPapers] = await Promise.all([
