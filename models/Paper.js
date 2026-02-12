@@ -7,28 +7,32 @@ const PaperSchema = new mongoose.Schema({
     department: { type: String, required: true },
     level: { type: String, required: true },
     
-    // ✅ CRITICAL FIX: 'year' is required to prevent "undefined" errors in the dropdown
+    // ✅ CRITICAL FIX: 'year' is required
     year: { type: String, required: true }, 
     
     semester: { type: String, required: true }, // 'First' or 'Second'
     
     // --- File Content ---
     type: { type: String }, // 'pdf' or 'image'
-    fileData: { type: String }, // Stores the heavy Base64 string
+
+    // ✅ FIX 1: THE MISSING LINK! (Multi-Page Array)
+    fileUrls: { type: [String], default: [] }, 
+
+    // Legacy Support (Single File)
+    fileData: { type: String }, 
+    fileUrl: { type: String },
     
-    // --- Typed Questions (for Admin Builder) ---
+    // --- Typed Questions ---
     instructions: String,
-    sections: [{
-        id: Number,
-        title: String,
-        questions: [{ text: String }]
-    }],
+    
+    // ✅ FIX 2: Crash-Proof Sections (Mixed Type)
+    sections: { type: mongoose.Schema.Types.Mixed },
 
     // --- Metadata ---
     uploadedBy: String,
     uploadedAt: { type: Date, default: Date.now },
 
-    // (Optional Legacy Fields - kept for safety if you used them before)
+    // (Optional Legacy Fields)
     imagePaths: [String], 
     documents: [{
         name: String,

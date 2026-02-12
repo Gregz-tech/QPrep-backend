@@ -47,7 +47,7 @@ mongoose.connect(process.env.MONGO_URI)
     .catch(err => console.log("❌ DB Error:", err));
 
 // ==========================================
-// 4. SCHEMAS
+// 4. SCHEMAS (UPDATED & ROBUST) 🛡️
 // ==========================================
 
 const UserSchema = new mongoose.Schema({
@@ -75,15 +75,17 @@ const PaperSchema = new mongoose.Schema({
     semester: { type: String, required: true },
     type: { type: String }, 
     
-    // ✅ CHANGED: Now stores an ARRAY of links (for multi-page support)
-    fileUrls: { type: [String], required: true }, 
+    // ✅ FIX 1: Multi-Page Support (Optional, defaults to empty)
+    fileUrls: { type: [String], default: [] }, 
+
+    // ✅ FIX 2: Legacy Support (Prevents crashes on old data)
+    fileUrl: { type: String },  
+    fileData: { type: String }, 
     
     instructions: String,
-    sections: [{
-        id: Number,
-        title: String,
-        questions: [{ text: String }]
-    }],
+
+    // ✅ FIX 3: Robust Sections (Prevents 'CastError' crash)
+    sections: { type: mongoose.Schema.Types.Mixed },
 
     uploadedBy: String,
     uploadedAt: { type: Date, default: Date.now }
@@ -184,9 +186,12 @@ app.get('/api/papers', async (req, res) => {
         let query = {};
         if (department) query.department = department;
         if (level) query.level = level;
+        
+        // Safety: Sort helps, but try-catch inside find handles bad data
         const papers = await Paper.find(query).sort({ createdAt: -1 });
         res.json(papers);
     } catch (err) {
+        console.error("Fetch Error:", err);
         res.status(500).json({ error: "Failed to fetch list" });
     }
 });
@@ -202,17 +207,16 @@ app.get('/api/papers/:id', async (req, res) => {
     }
 });
 
-// C. UPLOAD PAPER (MULTI-PAGE SUPPORT) 📸📸📸
+// C. UPLOAD PAPER (MULTI-PAGE + FIX) 📸
 app.post('/api/papers', verifyToken, requireStaff, upload.array('files', 12), async (req, res) => {
     try {
         let { departments, level, courseCode, courseTitle, year, semester, type, sections, instructions } = req.body;
         const u = req.user; 
 
-        // Validation
         if (!req.files || req.files.length === 0) return res.status(400).json({ error: "No files uploaded" });
         if (!courseCode || !year || !semester) return res.status(400).json({ error: "Missing required fields" });
 
-        // Handle Departments Array
+        // Department Handling
         let deptArray = [];
         if (typeof departments === 'string') {
             deptArray = departments.includes(',') ? departments.split(',') : [departments];
@@ -222,14 +226,14 @@ app.post('/api/papers', verifyToken, requireStaff, upload.array('files', 12), as
             deptArray = [departments];
         }
 
+        // ✅ FIX: Parse 'sections' safely
         let parsedSections = [];
         if (sections) {
             try {
-                // If it comes as a string (from FormData), parse it. If it's already an object, leave it.
                 parsedSections = typeof sections === 'string' ? JSON.parse(sections) : sections;
             } catch (e) {
                 console.error("Error parsing sections:", e);
-                parsedSections = []; // Fallback to empty if bad JSON
+                parsedSections = [];
             }
         }
 
@@ -252,8 +256,11 @@ app.post('/api/papers', verifyToken, requireStaff, upload.array('files', 12), as
                 year,
                 semester,
                 type: type || 'image',
-                fileUrls: cloudUrls,
-                sections: parsedSections, // ✅ Use the parsed version
+                fileUrls: cloudUrls, 
+                // ✅ Legacy fields (empty for new uploads)
+                fileUrl: cloudUrls[0] || "", 
+                fileData: "", 
+                sections: parsedSections,
                 instructions,
                 department: dept.trim(),
                 uploadedBy: u.username
@@ -265,7 +272,7 @@ app.post('/api/papers', verifyToken, requireStaff, upload.array('files', 12), as
 
     } catch (err) {
         console.error("Upload Error:", err);
-        res.status(500).json({ error: "Upload Failed: " + err.message });
+        res.status(500).json({ error: "Upload Failed" });
     }
 });
 
@@ -305,7 +312,7 @@ app.patch('/api/papers/:id', verifyToken, requireStaff, async (req, res) => {
 // ==========================================
 // 8. SUPER ADMIN ROUTES
 // ==========================================
-// (These remain exactly as before)
+// (Standard routes kept same)
 app.get('/api/super-admin/stats', async (req, res) => {
     try {
         const [totalUsers, totalStudents, totalAdmins, totalPapers] = await Promise.all([
