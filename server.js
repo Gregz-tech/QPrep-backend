@@ -13,7 +13,7 @@ const app = express();
 // ==========================================
 // 1. MIDDLEWARE
 // ==========================================
-app.use(express.json()); // No need for 50mb limit anymore!
+app.use(express.json());
 app.use(cors());
 
 const JWT_SECRET = process.env.JWT_SECRET || "super_secret_academic_key_123";
@@ -31,9 +31,9 @@ cloudinary.config({
 const storage = new CloudinaryStorage({
     cloudinary: cloudinary,
     params: {
-        folder: 'QPrep_Repository', // Folder name in Cloudinary
-        allowed_formats: ['jpg', 'png', 'pdf'],
-        resource_type: 'auto' // Important for detecting PDFs vs Images automatically
+        folder: 'QPrep_Repository',
+        allowed_formats: ['jpg', 'png', 'pdf', 'jpeg'],
+        resource_type: 'auto'
     }
 });
 
@@ -75,8 +75,8 @@ const PaperSchema = new mongoose.Schema({
     semester: { type: String, required: true },
     type: { type: String }, 
     
-    // ✅ CHANGED: Store URL string instead of massive file data
-    fileUrl: { type: String, required: true }, 
+    // ✅ CHANGED: Now stores an ARRAY of links (for multi-page support)
+    fileUrls: { type: [String], required: true }, 
     
     instructions: String,
     sections: [{
@@ -106,16 +106,12 @@ const verifyToken = (req, res, next) => {
 };
 
 const requireStaff = (req, res, next) => {
-    if (req.user.role === 'student') {
-        return res.status(403).json({ error: "Access denied. Staff only." });
-    }
+    if (req.user.role === 'student') return res.status(403).json({ error: "Access denied. Staff only." });
     next();
 };
 
 const requireSuperAdmin = (req, res, next) => {
-    if (req.user.role !== 'super_admin') {
-        return res.status(403).json({ error: "Access denied. Super Admin only." });
-    }
+    if (req.user.role !== 'super_admin') return res.status(403).json({ error: "Access denied. Super Admin only." });
     next();
 };
 
@@ -188,7 +184,6 @@ app.get('/api/papers', async (req, res) => {
         let query = {};
         if (department) query.department = department;
         if (level) query.level = level;
-        // No need to exclude fileData anymore, fileUrl is small!
         const papers = await Paper.find(query).sort({ createdAt: -1 });
         res.json(papers);
     } catch (err) {
@@ -207,22 +202,20 @@ app.get('/api/papers/:id', async (req, res) => {
     }
 });
 
-// C. UPLOAD PAPER (Now with Cloudinary!) 🚀
-// Note: 'file' matches the formData name in frontend
-app.post('/api/papers', verifyToken, requireStaff, upload.single('file'), async (req, res) => {
+// C. UPLOAD PAPER (MULTI-PAGE SUPPORT) 📸📸📸
+// Changed .single('file') to .array('files', 12) to accept multiple images
+app.post('/api/papers', verifyToken, requireStaff, upload.array('files', 12), async (req, res) => {
     try {
-        // req.body contains the text fields
         let { departments, level, courseCode, courseTitle, year, semester, type, sections, instructions } = req.body;
         const u = req.user; 
 
         // Validation
-        if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+        if (!req.files || req.files.length === 0) return res.status(400).json({ error: "No files uploaded" });
         if (!courseCode || !year || !semester) return res.status(400).json({ error: "Missing required fields" });
 
-        // Handle Array of departments (sent as string "ITH,CSC" or array from frontend)
+        // Handle Departments Array
         let deptArray = [];
         if (typeof departments === 'string') {
-            // If it comes as "ITH,CSC", split it. If just "ITH", make array.
             deptArray = departments.includes(',') ? departments.split(',') : [departments];
         } else if (Array.isArray(departments)) {
             deptArray = departments;
@@ -239,6 +232,9 @@ app.post('/api/papers', verifyToken, requireStaff, upload.single('file'), async 
             }
         }
 
+        // Get all Cloudinary URLs from the uploaded files
+        const cloudUrls = req.files.map(file => file.path);
+
         // Save for each department
         const savePromises = deptArray.map(dept => {
             return new Paper({
@@ -248,16 +244,16 @@ app.post('/api/papers', verifyToken, requireStaff, upload.single('file'), async 
                 year,
                 semester,
                 type: type || 'image',
-                fileUrl: req.file.path, // ✅ The Cloudinary URL
+                fileUrls: cloudUrls, // ✅ Save the Array of URLs
                 sections,
                 instructions,
-                department: dept.trim(), // Remove whitespace
+                department: dept.trim(),
                 uploadedBy: u.username
             }).save();
         });
 
         await Promise.all(savePromises);
-        res.status(201).json({ message: `Success! Uploaded to ${deptArray.length} department(s).`, url: req.file.path });
+        res.status(201).json({ message: `Success! Uploaded ${req.files.length} pages to ${deptArray.length} department(s).`, urls: cloudUrls });
 
     } catch (err) {
         console.error("Upload Error:", err);
@@ -301,10 +297,7 @@ app.patch('/api/papers/:id', verifyToken, requireStaff, async (req, res) => {
 // ==========================================
 // 8. SUPER ADMIN ROUTES
 // ==========================================
-// ... (Your Super Admin routes for stats, users, etc. remain unchanged)
-// They are safe to leave as they were in your previous file.
-// I am including them here for completeness.
-
+// (These remain exactly as before)
 app.get('/api/super-admin/stats', async (req, res) => {
     try {
         const [totalUsers, totalStudents, totalAdmins, totalPapers] = await Promise.all([
