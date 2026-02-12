@@ -203,7 +203,6 @@ app.get('/api/papers/:id', async (req, res) => {
 });
 
 // C. UPLOAD PAPER (MULTI-PAGE SUPPORT) 📸📸📸
-// Changed .single('file') to .array('files', 12) to accept multiple images
 app.post('/api/papers', verifyToken, requireStaff, upload.array('files', 12), async (req, res) => {
     try {
         let { departments, level, courseCode, courseTitle, year, semester, type, sections, instructions } = req.body;
@@ -223,6 +222,17 @@ app.post('/api/papers', verifyToken, requireStaff, upload.array('files', 12), as
             deptArray = [departments];
         }
 
+        let parsedSections = [];
+        if (sections) {
+            try {
+                // If it comes as a string (from FormData), parse it. If it's already an object, leave it.
+                parsedSections = typeof sections === 'string' ? JSON.parse(sections) : sections;
+            } catch (e) {
+                console.error("Error parsing sections:", e);
+                parsedSections = []; // Fallback to empty if bad JSON
+            }
+        }
+
         // Moderator Check
         if (u.role === 'moderator') {
             for (const dept of deptArray) {
@@ -232,10 +242,8 @@ app.post('/api/papers', verifyToken, requireStaff, upload.array('files', 12), as
             }
         }
 
-        // Get all Cloudinary URLs from the uploaded files
         const cloudUrls = req.files.map(file => file.path);
 
-        // Save for each department
         const savePromises = deptArray.map(dept => {
             return new Paper({
                 courseCode,
@@ -244,8 +252,8 @@ app.post('/api/papers', verifyToken, requireStaff, upload.array('files', 12), as
                 year,
                 semester,
                 type: type || 'image',
-                fileUrls: cloudUrls, // ✅ Save the Array of URLs
-                sections,
+                fileUrls: cloudUrls,
+                sections: parsedSections, // ✅ Use the parsed version
                 instructions,
                 department: dept.trim(),
                 uploadedBy: u.username
@@ -257,7 +265,7 @@ app.post('/api/papers', verifyToken, requireStaff, upload.array('files', 12), as
 
     } catch (err) {
         console.error("Upload Error:", err);
-        res.status(500).json({ error: "Upload Failed" });
+        res.status(500).json({ error: "Upload Failed: " + err.message });
     }
 });
 
