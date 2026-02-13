@@ -18,8 +18,6 @@ const UserSchema = new mongoose.Schema({
         default: 'student' 
     },
 
-    // 4. MODERATOR SCOPE (Only used if role == 'moderator')
-    // This defines where they are allowed to upload
     moderatorScope: {
         institution: String,
         department: String,
